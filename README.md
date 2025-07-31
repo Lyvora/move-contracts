@@ -1,1 +1,1 @@
-# move-contracts
+# Lyvora Marketplace Move smart contracts

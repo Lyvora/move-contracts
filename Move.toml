@@ -1,0 +1,10 @@
+[package]
+name = "lyvora"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", rev = "2ae3516a77d8f3083d7bc24b5228b6bfd4a83117", subdir = "crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+lyvora = "0x0"
