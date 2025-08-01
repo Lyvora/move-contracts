@@ -21,6 +21,14 @@ public struct Marketplace has key {
     admin: address,
 }
 
+public struct OrderHub has key {
+    id: UID,
+}
+
+public struct StoreHub has key {
+    id: UID,
+}
+
 public struct Store has key {
     id: UID,
     name: vector<u8>,
@@ -91,13 +99,14 @@ public fun list_product(
         store: object::uid_to_address(&store.id),
     };
 
-    dof::add(&mut marketplace.id, product_address, product);
+    dof::add<address, Product>(&mut marketplace.id, product_address, product);
 }
 
 public fun order_product(
     marketplace: &mut Marketplace,
+    order_hub: &mut OrderHub,
     store: &mut Store,
-    product: &Product,
+    product_address: address,
     shipping_address: vector<u8>,
     mut payment: Coin<SUI>,
     quantity: u64,
@@ -106,6 +115,7 @@ public fun order_product(
 ) {
     // Logic to handle ordering a product
     // This include checking stock, processing payment, etc.
+    let product = dof::borrow_mut<address, Product>(&mut marketplace.id, product_address);
 
     assert!(quantity * product.price == coin::value(&payment), EProductPriceNotMatch);
     assert!(product.stock >= quantity, EOutOfStock);
@@ -129,6 +139,33 @@ public fun order_product(
         payment: payment,
     };
 
-    dof::add(&mut marketplace.id, order_address, order);
+    dof::add<address, Order>(&mut order_hub.id, order_address, order);
+
+    product.stock = product.stock - quantity;
+}
+
+
+public fun change_product_price(
+    marketplace: &mut Marketplace,
+    store: &mut Store,
+    product: &mut Product,
+    new_price: u64,
+    ctx: &mut TxContext
+) {
+    // Logic to change the price of a product
+    assert!(tx_context::sender(ctx) == store.owner, ENotStoreOwner);
+    product.price = new_price;
+}
+
+public fun change_product_stock(
+    marketplace: &mut Marketplace,
+    store: &mut Store,
+    product: &mut Product,
+    new_stock: u64,
+    ctx: &mut TxContext
+) {
+    // Logic to change the stock of a product
+    assert!(tx_context::sender(ctx) == store.owner, ENotStoreOwner);
+    product.stock = new_stock;
 }
 
