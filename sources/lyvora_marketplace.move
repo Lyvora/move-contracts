@@ -6,6 +6,7 @@ use sui::sui::SUI;
 use sui::dynamic_object_field as dof;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
+use std::fixed_point32;
 
 public enum OrderStatus has store {
     Pending,
@@ -57,6 +58,12 @@ const ENotStoreOwner: u64 = 0;
 const EOutOfStock: u64 = 1;
 const EProductPriceNotMatch: u64 = 2;
 
+fun calculate_fee(amount: u64,fee_pbs: u64,collateral_fee: u64) : u64{
+         let fee_fraction = fixed_point32::create_from_rational(fee_pbs,collateral_fee);
+         let fee_amount = fixed_point32::multiply_u64(amount,fee_fraction);
+         fee_amount
+}
+
 public fun list_product(
     marketplace: &mut Marketplace,
     store: &mut Store,
@@ -92,16 +99,21 @@ public fun order_product(
     store: &mut Store,
     product: &Product,
     shipping_address: vector<u8>,
-    payment: Coin<SUI>,
-    count: u64,
+    mut payment: Coin<SUI>,
+    quantity: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Logic to handle ordering a product
     // This include checking stock, processing payment, etc.
 
-    assert!(count * product.price == coin::value(&payment), EProductPriceNotMatch);
-    assert!(product.stock > 0, EOutOfStock);
+    assert!(quantity * product.price == coin::value(&payment), EProductPriceNotMatch);
+    assert!(product.stock >= quantity, EOutOfStock);
+
+    let coin_value = coin::value(&payment);
+    let fee_amount = calculate_fee(coin_value,marketplace.fee_pbs,10000);
+    let fee = coin::split(&mut payment,fee_amount,ctx);
+    transfer::public_transfer(fee,marketplace.admin);
 
     let order_id = object::new(ctx);
     let order_address = object::uid_to_address(&order_id);
@@ -113,9 +125,10 @@ public fun order_product(
         order_status: OrderStatus::Pending,
         shipping_address: shipping_address,
         order_date: clock::timestamp_ms(clock),
-        total_price: count * product.price,
+        total_price: quantity * product.price,
         payment: payment,
     };
 
     dof::add(&mut marketplace.id, order_address, order);
 }
+
