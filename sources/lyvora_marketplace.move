@@ -35,6 +35,7 @@ public struct Store has key, store {
     description: vector<u8>,
     image_url: vector<u8>,
     owner: address,
+    proceeds: Balance<SUI>,
 }
 
 public struct Product has key, store {
@@ -59,7 +60,7 @@ public struct Order has key, store {
     shipping_address: vector<u8>,
     order_date: u64,
     total_price: u64,
-    payment: Coin<SUI>,
+    payment: Balance<SUI>,
 }
 
 const ENotStoreOwner: u64 = 0;
@@ -100,6 +101,7 @@ public fun new_store(
         description: description,
         image_url: image_url,
         owner: tx_context::sender(ctx),
+        proceeds: balance::zero<SUI>(),
     };
 
     dof::add<address, Store>(&mut storehub.id, store_address, store);
@@ -141,8 +143,9 @@ public fun list_product(
 
 public fun purchase_product(
     marketplace: &mut Marketplace,
+    storehub: &mut StoreHub,
     order_hub: &mut OrderHub,
-    store: &mut Store,
+    store_address: address,
     product_address: address,
     quantity: u64,
     shipping_address: vector<u8>,
@@ -153,6 +156,7 @@ public fun purchase_product(
     // Logic to handle ordering a product
     // This include checking stock, processing payment, etc.
     let product = dof::borrow_mut<address, Product>(&mut marketplace.id, product_address);
+    let store = dof::borrow_mut<address, Store>(&mut storehub.id, store_address);
 
     assert!(quantity * product.price == coin::value(&payment), EProductPriceNotMatch);
     assert!(product.stock >= quantity, EOutOfStock);
@@ -173,11 +177,13 @@ public fun purchase_product(
         shipping_address: shipping_address,
         order_date: clock::timestamp_ms(clock),
         total_price: quantity * product.price,
-        payment: payment,
+        payment: balance::zero<SUI>(),
     };
 
     dof::add<address, Order>(&mut order_hub.id, order_address, order);
 
+    coin::put<SUI>(&mut store.proceeds, payment);
+    
     product.stock = product.stock - quantity;
 }
 
