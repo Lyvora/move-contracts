@@ -8,7 +8,7 @@ use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use std::fixed_point32;
 
-public enum OrderStatus has store {
+public enum OrderStatus has store, drop {
     Pending,
     Shipped,
     Completed,
@@ -183,8 +183,32 @@ public fun purchase_product(
     dof::add<address, Order>(&mut order_hub.id, order_address, order);
 
     coin::put<SUI>(&mut store.proceeds, payment);
-    
+
     product.stock = product.stock - quantity;
+}
+
+public fun mark_product_as_delivered(
+    marketplace: &mut Marketplace,
+    storehub: &mut StoreHub,
+    order_hub: &mut OrderHub,
+    store_address: address,
+    order_address: address,
+    ctx: &mut TxContext
+) {
+    // Logic to mark an order as delivered
+    let order = dof::borrow_mut<address, Order>(&mut order_hub.id, order_address);
+    let store = dof::borrow_mut<address, Store>(&mut storehub.id, store_address);
+    assert!(tx_context::sender(ctx) == order.buyer, ENotStoreOwner);
+
+    order.order_status = OrderStatus::Shipped;
+
+    let coin_value = balance::value(&order.payment);
+    let fee_amount = calculate_fee(coin_value,marketplace.fee_pbs,10000);
+    let fee = balance::split(&mut order.payment,fee_amount);
+    transfer::public_transfer(coin::from_balance<SUI>(fee,ctx),marketplace.admin);
+
+    let payment_balance = balance::withdraw_all<SUI>(&mut order.payment);
+    balance::join<SUI>(&mut store.proceeds, payment_balance);
 }
 
 public fun delete_product(
